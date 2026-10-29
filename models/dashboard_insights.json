@@ -1,0 +1,20 @@
+{
+  "total_orders": 60000,
+  "returned_orders": 10961,
+  "historical_return_rate": 0.18268333333333334,
+  "return_rate_by_product_category": [
+    {"name": "Beauty", "orders": 4915, "returns": 833, "return_rate": 0.16948118006103763},
+    {"name": "Books", "orders": 4198, "returns": 527, "return_rate": 0.12553596950929014},
+    {"name": "Clothing", "orders": 14346, "returns": 3148, "return_rate": 0.219433988568242},
+    {"name": "Electronics", "orders": 9089, "returns": 1574, "return_rate": 0.17317636703707778},
+    {"name": "Home & Kitchen", "orders": 8362, "returns": 1471, "return_rate": 0.17591485290600334},
+    {"name": "Shoes", "orders": 8409, "returns": 1701, "return_rate": 0.20228326792722084},
+    {"name": "Sports", "orders": 4710, "returns": 810, "return_rate": 0.17197452229299362},
+    {"name": "Toys", "orders": 5971, "returns": 897, "return_rate": 0.1502260927817786}
+  ],
+  "return_rate_by_shipping_method": [
+    {"name": "Express", "orders": 17395, "returns": 2919, "return_rate": 0.16780684104627766},
+    {"name": "Same Day", "orders": 2951, "returns": 518, "return_rate": 0.17553371738393764},
+    {"name": "Standard", "orders": 39654, "returns": 7524, "return_rate": 0.18974126191556967}
+  ]
+}

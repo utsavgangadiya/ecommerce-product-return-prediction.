@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local environment variables and credentials
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+secrets.toml
+
+# Notebook and editor state
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# Logs, caches, and generated files
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# Ignore row-level data; only aggregate insights are required by the app.
+datasets/*
+!datasets/.gitkeep
+
+# Keep only the model and metrics needed by the deployed dashboard.
+models/*
+!models/best_return_detection_model.joblib
+!models/two_model_comparison_metrics.csv
+!models/dashboard_insights.json
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
