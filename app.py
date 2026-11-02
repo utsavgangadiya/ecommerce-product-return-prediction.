@@ -79,8 +79,8 @@ CATEGORY_OPTIONS = {
 }
 
 st.set_page_config(
-    page_title="Return Intelligence | E-commerce Analytics",
-    page_icon="R",
+    page_title="Returns Desk | Order Analytics",
+    page_icon="↩",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -89,13 +89,13 @@ st.markdown(
     """
     <style>
     :root {
-        --ink: #172a3a;
-        --muted: #718096;
-        --teal: #087f8c;
-        --teal-dark: #07636d;
-        --mint: #e7f5f2;
-        --paper: #f5f8fa;
-        --line: #e4ebef;
+        --ink: #252b27;
+        --muted: #74766f;
+        --accent: #bd583d;
+        --accent-dark: #9e422d;
+        --paper: #f6f4ef;
+        --line: #e6e1d8;
+        --panel: #fffefa;
     }
 
     html, body, [class*="css"] {
@@ -105,141 +105,308 @@ st.markdown(
 
     .stApp { background: var(--paper); }
     [data-testid="stHeader"] { background: transparent; }
-    [data-testid="stSidebar"] {
-        background: #102b3a;
-        border-right: 1px solid #214452;
+    [data-testid="stMainBlockContainer"] {
+        max-width: 1440px;
+        padding-top: 2rem;
+        padding-bottom: 3rem;
     }
-    [data-testid="stSidebar"] * { color: #eaf3f5; }
+    [data-testid="stSidebar"] {
+        background: #272d29;
+        border-right: 1px solid #343a35;
+    }
+    [data-testid="stSidebar"] * { color: #f2efe8; }
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+        color: #c2c2b9;
+    }
     [data-testid="stSidebar"] [data-testid="stRadio"] label {
-        padding: 0.35rem 0.55rem;
-        border-radius: 8px;
+        padding: 0.5rem 0.65rem;
+        border-radius: 7px;
+        transition: background 140ms ease;
     }
     [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
-        background: #1b3d4c;
+        background: #393f3a;
     }
 
     .brand-mark {
         display: inline-flex;
-        width: 38px;
-        height: 38px;
+        width: 36px;
+        height: 36px;
         align-items: center;
         justify-content: center;
-        border: 1px solid #6cc7c3;
-        border-radius: 12px;
-        color: #a7e4dc;
-        font-family: 'Aptos Display', 'Segoe UI', sans-serif;
-        font-weight: 800;
-        font-size: 17px;
-        margin-right: 10px;
+        border: 1px solid #a65840;
+        border-radius: 50%;
+        background: #bd583d;
+        color: #fff9f0;
+        font-family: Georgia, serif;
+        font-weight: 700;
+        font-size: 19px;
+        margin-right: 9px;
         vertical-align: middle;
     }
     .brand-name {
         display: inline-block;
-        color: #f4fbfc;
-        font-family: 'Aptos Display', 'Segoe UI', sans-serif;
-        font-size: 16px;
+        color: #fffefa;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 18px;
         font-weight: 700;
         vertical-align: middle;
     }
     .sidebar-caption {
-        color: #a8c1c8;
+        color: #b7b9b0;
         font-size: 12px;
         line-height: 1.6;
-        margin: 14px 0 24px;
+        margin: 12px 0 24px;
     }
     .eyebrow {
-        color: var(--teal);
-        font-size: 16px;
-        font-weight: 800;
-        letter-spacing: 0.1em;
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 750;
+        letter-spacing: 0.14em;
         text-transform: uppercase;
-        margin-bottom: 10px;
+        margin-bottom: 9px;
     }
     .page-title {
         color: var(--ink);
-        font-family: 'Aptos Display', 'Segoe UI', sans-serif;
-        font-size: clamp(28px, 3vw, 38px);
-        font-weight: 800;
-        letter-spacing: -0.04em;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: clamp(32px, 3vw, 43px);
+        font-weight: 500;
+        letter-spacing: -0.035em;
         line-height: 1.15;
-        margin: 0 0 7px;
+        margin: 0 0 8px;
     }
     .page-subtitle {
         color: var(--muted);
         font-size: 14px;
-        margin: 0 0 18px;
+        line-height: 1.65;
+        margin: 0 0 23px;
     }
     .section-heading {
         color: var(--ink);
-        font-family: 'Aptos Display', 'Segoe UI', sans-serif;
-        font-size: 19px;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 21px;
         font-weight: 700;
-        margin: 24px 0 12px;
+        margin: 26px 0 12px;
     }
     .hero-card {
-        background: linear-gradient(120deg, #123748, #087f8c);
-        border-radius: 18px;
-        color: white;
-        padding: 22px 26px;
-        margin: 8px 0 18px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(230px, 0.7fr);
+        gap: 30px;
+        align-items: stretch;
+        background: #292f2b;
+        border: 1px solid #363c37;
+        border-radius: 13px;
+        color: #fffefa;
+        padding: 30px 34px;
+        margin: 8px 0 20px;
+        box-shadow: 0 12px 30px rgba(37, 43, 39, 0.08);
     }
-    .hero-card h2 {
-        color: white;
-        font-family: 'Aptos Display', 'Segoe UI', sans-serif;
-        font-size: 24px;
-        margin: 0 0 8px;
+    .hero-kicker {
+        color: #d8957e;
+        font-size: 10px;
+        font-weight: 750;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        margin: 0 0 16px;
     }
-    .hero-card p {
-        color: #d7eff0;
-        font-size: 13px;
-        line-height: 1.5;
+    .hero-stat {
+        color: #fffefa;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: clamp(46px, 6vw, 72px);
+        letter-spacing: -0.055em;
+        line-height: 1;
         margin: 0;
-        max-width: 760px;
+    }
+    .hero-caption {
+        color: #d0d1c9;
+        font-size: 13px;
+        line-height: 1.65;
+        margin: 13px 0 0;
+        max-width: 540px;
+    }
+    .hero-aside {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        border-left: 1px solid #4a504a;
+        padding-left: 28px;
+    }
+    .hero-aside-label {
+        color: #c4c5bc;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+    }
+    .hero-aside strong {
+        color: #fffefa;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 20px;
+        font-weight: 500;
+        line-height: 1.35;
+    }
+    .hero-aside span {
+        color: #c4c5bc;
+        font-size: 12px;
+        line-height: 1.6;
+        margin-top: 8px;
     }
     .note-card {
-        background: white;
+        background: var(--panel);
         border: 1px solid var(--line);
-        border-left: 4px solid var(--teal);
-        border-radius: 10px;
-        color: #405366;
+        border-left: 3px solid var(--accent);
+        border-radius: 8px;
+        color: #55574f;
         font-size: 13px;
-        line-height: 1.6;
-        padding: 14px 17px;
-        margin: 12px 0 20px;
+        line-height: 1.7;
+        padding: 15px 18px;
+        margin: 14px 0 22px;
+    }
+    .result-card {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 20px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-top: 3px solid var(--accent);
+        border-radius: 9px;
+        padding: 21px 24px;
+        margin: 20px 0 12px;
+    }
+    .result-card.result-low { border-top-color: #63836f; }
+    .result-card.result-review { border-top-color: #bd7d3d; }
+    .result-card.result-high { border-top-color: #bd583d; }
+    .result-label {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+    }
+    .result-score {
+        color: var(--ink);
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 38px;
+        letter-spacing: -0.04em;
+        line-height: 1.15;
+        margin-top: 5px;
+    }
+    .result-meter {
+        width: min(390px, 42vw);
+        height: 7px;
+        background: #e9e5dd;
+        border-radius: 20px;
+        margin-top: 14px;
+        overflow: hidden;
+    }
+    .result-meter span {
+        display: block;
+        height: 100%;
+        background: var(--accent);
+        border-radius: inherit;
+    }
+    .result-low .result-meter span { background: #63836f; }
+    .result-review .result-meter span { background: #bd7d3d; }
+    .result-risk {
+        color: var(--ink);
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 20px;
+        text-align: right;
+    }
+    .result-risk small {
+        display: block;
+        color: var(--muted);
+        font-family: 'Aptos', 'Segoe UI', sans-serif;
+        font-size: 11px;
+        margin-top: 5px;
     }
     div[data-testid="stMetric"] {
-        background: white;
+        background: var(--panel);
         border: 1px solid var(--line);
-        border-radius: 13px;
-        padding: 15px 17px;
+        border-radius: 9px;
+        padding: 14px 13px;
+        min-height: 110px;
+        box-shadow: 0 3px 12px rgba(37, 43, 39, 0.025);
     }
-    div[data-testid="stMetricLabel"] { color: var(--muted); }
+    div[data-testid="stMetricLabel"] {
+        color: var(--muted);
+        font-size: 12px;
+    }
     div[data-testid="stMetricValue"] {
         color: var(--ink);
-        font-family: 'Manrope', sans-serif;
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 24px;
+    }
+    div[data-testid="stMetricDelta"] {
+        color: var(--muted);
+        font-size: 11px;
     }
     .stButton > button, .stDownloadButton > button {
-        border-radius: 9px;
-        font-weight: 600;
+        border-radius: 7px;
+        font-weight: 650;
         min-height: 42px;
     }
     .stButton > button[kind="primary"] {
-        background: var(--teal);
-        border-color: var(--teal);
+        background: var(--accent);
+        border-color: var(--accent);
     }
     .stButton > button[kind="primary"]:hover {
-        background: var(--teal-dark);
-        border-color: var(--teal-dark);
+        background: var(--accent-dark);
+        border-color: var(--accent-dark);
     }
     div[data-testid="stForm"] {
-        background: white;
+        background: var(--panel);
         border: 1px solid var(--line);
-        border-radius: 15px;
-        padding: 20px;
+        border-radius: 10px;
+        padding: 22px;
+    }
+    div[data-testid="stFileUploader"] section {
+        background: var(--panel);
+        border: 1px dashed #c9c1b6;
+        border-radius: 9px;
+    }
+    div[data-testid="stDataFrame"] {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    div[data-testid="stExpander"] {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+    }
+    [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+        color: #b7b9b0;
     }
     .small-muted {
         color: var(--muted);
         font-size: 12px;
+    }
+
+    @media (max-width: 760px) {
+        [data-testid="stMainBlockContainer"] {
+            padding: 1.25rem 1rem 2rem;
+        }
+        .hero-card {
+            grid-template-columns: 1fr;
+            gap: 22px;
+            padding: 24px;
+        }
+        .hero-aside {
+            border-left: 0;
+            border-top: 1px solid #4a504a;
+            padding: 18px 0 0;
+        }
+        .result-card {
+            grid-template-columns: 1fr;
+        }
+        .result-meter {
+            width: 100%;
+        }
+        .result-risk {
+            text-align: left;
+        }
     }
     </style>
     """,
@@ -409,57 +576,70 @@ xgb_metrics = xgb_row.iloc[0]
 
 with st.sidebar:
     st.markdown(
-        '<span class="brand-mark">R</span><span class="brand-name">Return Intelligence</span>',
+        '<span class="brand-mark">R</span><span class="brand-name">Returns Desk</span>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<div class="sidebar-caption">E-commerce product return analytics and decision support</div>',
+        '<div class="sidebar-caption">A practical workspace for order reviews and return patterns.</div>',
         unsafe_allow_html=True,
     )
     page = st.radio(
-        "WORKSPACE",
+        "YOUR WORKSPACE",
         ["Overview", "Predict an order", "Score a file", "Insights & model"],
         label_visibility="visible",
     )
     st.markdown("---")
-    st.caption("Model: XGBoost")
-    st.caption(f"Return-review threshold: {saved_threshold:.1%}")
+    st.caption("CURRENT DETECTOR")
+    st.markdown("**XGBoost · return review**")
+    st.caption("Review score uses a validation-tuned cutoff")
 
 threshold = float(saved_threshold)
 
 if page == "Overview":
+    total_orders = int(insights["total_orders"])
+    historical_return_rate = float(insights["historical_return_rate"])
+    returned_orders = int(insights["returned_orders"])
     render_page_header(
-        "E-COMMERCE ANALYTICS",
-        "Return intelligence",
-        "See return risk at a glance.",
+        "RETURNS DESK  /  PORTFOLIO",
+        "A clearer view of what comes back.",
+        "A practical snapshot of historical orders and how well the return detector finds them.",
     )
     st.markdown(
-        """
+        f"""
         <div class="hero-card">
-            <h2>Turn order data into clearer decisions.</h2>
-            <p>
-                Score an order or upload a batch to find returns that may need review.
-            </p>
+            <div>
+                <p class="hero-kicker">Across the order sample</p>
+                <p class="hero-stat">{historical_return_rate:.1%}</p>
+                <p class="hero-caption">
+                    of {total_orders:,} orders were returned. That's about one in
+                    {max(1, round(1 / historical_return_rate))} orders in this dataset.
+                    Use it as context for today's reviews, not as a forecast.
+                </p>
+            </div>
+            <div class="hero-aside">
+                <span class="hero-aside-label">For the team</span>
+                <strong>Start with the order. Let the data add context.</strong>
+                <span>Score a single order or a whole file, then review the details before acting.</span>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    total_orders = int(insights["total_orders"])
-    historical_return_rate = float(insights["historical_return_rate"])
-    kpi_cols = st.columns(4)
-    kpi_cols[0].metric("Orders analyzed", f"{total_orders:,}")
-    kpi_cols[1].metric("Historical return rate", f"{historical_return_rate:.1%}")
-    kpi_cols[2].metric("XGBoost ROC-AUC", f"{xgb_metrics['Test ROC-AUC']:.3f}")
-    kpi_cols[3].metric("F1-tuned test recall", f"{xgb_metrics['Test Recall (F1 threshold)']:.1%}")
+    kpi_cols = st.columns(4, gap="medium")
+    kpi_cols[0].metric("Orders", f"{total_orders:,}")
+    kpi_cols[1].metric("Returned", f"{returned_orders:,}")
+    kpi_cols[2].metric("Detector ROC-AUC", f"{xgb_metrics['Test ROC-AUC']:.3f}")
+    kpi_cols[3].metric("Return recall", f"{xgb_metrics['Test Recall (F1 threshold)']:.1%}")
 
     st.markdown(
         f"""
         <div class="note-card">
-            <strong>Accuracy can mislead:</strong> At the default cutoff, accuracy matches the
-            {max(historical_return_rate, 1 - historical_return_rate):.1%} baseline and misses most returns.
-            The tuned cutoff finds {xgb_metrics['Test Recall (F1 threshold)']:.1%} of returns;
-            {xgb_metrics['Test Precision (F1 threshold)']:.1%} of flagged orders are returns.
+            <strong>Reading the model:</strong> The test-set return rate is
+            {historical_return_rate:.1%}. At its validation-selected review cutoff, the detector
+            found {xgb_metrics['Test Recall (F1 threshold)']:.1%} of returned orders, and
+            {xgb_metrics['Test Precision (F1 threshold)']:.1%} of flagged orders were returns.
+            Accuracy alone can hide missed returns when most orders are kept.
         </div>
         """,
         unsafe_allow_html=True,
@@ -467,7 +647,7 @@ if page == "Overview":
 
     left, right = st.columns([1.2, 1])
     with left:
-        st.markdown('<div class="section-heading">Return rate by product category</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-heading">Returns by product category</div>', unsafe_allow_html=True)
         category_rates = pd.Series(
             {
                 item["name"]: float(item["return_rate"]) * 100
@@ -475,12 +655,12 @@ if page == "Overview":
             },
             name="Return rate (%)",
         ).sort_values(ascending=False)
-        st.bar_chart(category_rates, horizontal=True, color="#087f8c")
+        st.bar_chart(category_rates, horizontal=True, color="#bd583d")
     with right:
-        st.markdown('<div class="section-heading">Model snapshot</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-heading">How the detector performed</div>', unsafe_allow_html=True)
         snapshot = pd.DataFrame(
             {
-                "Measure": ["Test precision at tuned threshold", "Test recall at tuned threshold", "Test F1 at tuned threshold", "Test ROC-AUC"],
+                "Measure": ["Precision · flagged orders that returned", "Recall · returns found", "F1 · precision and recall balance", "ROC-AUC · ranking quality"],
                 "Result": [
                     xgb_metrics["Test Precision (F1 threshold)"],
                     xgb_metrics["Test Recall (F1 threshold)"],
@@ -491,7 +671,7 @@ if page == "Overview":
         )
         snapshot["Result"] = snapshot["Result"].map(lambda value: f"{value:.3f}")
         st.dataframe(snapshot, hide_index=True, width="stretch")
-        st.caption("Metrics are from the held-out test set; threshold was chosen using validation data.")
+        st.caption("Held-out test results. The review cutoff was chosen on validation data.")
 
 elif page == "Predict an order":
     render_page_header(
@@ -575,10 +755,24 @@ elif page == "Predict an order":
         score = float(detector.predict_proba(features)[0, 1])
         label, risk_level = classify_score(score, threshold)
         st.markdown("---")
-        score_col, label_col = st.columns([1, 2])
-        score_col.metric("Estimated return score", f"{score:.1%}")
-        label_col.markdown(f"### {label}")
-        st.progress(min(max(score, 0.0), 1.0), text=f"Review threshold: {threshold:.1%}")
+        st.markdown(
+            f"""
+            <div class="result-card result-{risk_level}" role="status">
+                <div>
+                    <div class="result-label">Estimated return score</div>
+                    <div class="result-score">{score:.1%}</div>
+                    <div class="result-meter" aria-label="Score {score:.1%}">
+                        <span style="width: {min(max(score, 0.0), 1.0):.1%}"></span>
+                    </div>
+                </div>
+                <div class="result-risk">
+                    {label}
+                    <small>Review threshold: {threshold:.1%}</small>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         if risk_level == "high":
             st.warning("Prioritize this order for a return-prevention or fulfillment review.")
         elif risk_level == "review":
@@ -663,59 +857,63 @@ else:
     render_page_header(
         "MODEL TRANSPARENCY",
         "Insights and model performance",
-        "Review the test-set results and the strongest signals used by the selected return detector.",
+        "A concise view of how the return detector performs, with supporting detail when you need it.",
     )
     st.markdown(
         """
         <div class="note-card">
-            The model was selected for return detection using validation F1, not raw accuracy.
-            The source dataset is imbalanced, so a model can achieve high accuracy by predicting
-            that nearly every order will not be returned. Always review precision, recall, F1,
-            and the operational cost of investigating flagged orders.
+            The deployed XGBoost model is tuned to catch returned orders. The scores below
+            summarize its held-out test results; expand the sections below for the full
+            comparison and supporting charts.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    display_metrics = metrics.copy()
-    display_metrics = display_metrics[
-        [
-            "Model",
-            "Test Accuracy (0.50)",
-            "Test Precision (0.50)",
-            "Test Recall (0.50)",
-            "Test F1 (0.50)",
-            "Test Accuracy (F1 threshold)",
-            "Test Precision (F1 threshold)",
-            "Test Recall (F1 threshold)",
-            "Test F1 (F1 threshold)",
-            "Test ROC-AUC",
+    recall_col, precision_col = st.columns(2, gap="medium")
+    recall_col.metric("Returns found · test recall", f"{xgb_metrics['Test Recall (F1 threshold)']:.1%}")
+    precision_col.metric("Flagged orders returned · test precision", f"{xgb_metrics['Test Precision (F1 threshold)']:.1%}")
+
+    with st.expander("Detailed model comparison", expanded=False):
+        display_metrics = metrics.copy()
+        display_metrics = display_metrics[
+            [
+                "Model",
+                "Test Accuracy (0.50)",
+                "Test Precision (0.50)",
+                "Test Recall (0.50)",
+                "Test F1 (0.50)",
+                "Test Accuracy (F1 threshold)",
+                "Test Precision (F1 threshold)",
+                "Test Recall (F1 threshold)",
+                "Test F1 (F1 threshold)",
+                "Test ROC-AUC",
+            ]
         ]
-    ]
-    display_metrics = display_metrics.rename(
-        columns={
-            "Test Accuracy (0.50)": "Accuracy @ 0.50",
-            "Test Precision (0.50)": "Precision @ 0.50",
-            "Test Recall (0.50)": "Recall @ 0.50",
-            "Test F1 (0.50)": "F1 @ 0.50",
-            "Test Accuracy (F1 threshold)": "Accuracy @ tuned threshold",
-            "Test Precision (F1 threshold)": "Precision @ tuned threshold",
-            "Test Recall (F1 threshold)": "Recall @ tuned threshold",
-            "Test F1 (F1 threshold)": "F1 @ tuned threshold",
-            "Test ROC-AUC": "ROC-AUC",
-        }
-    )
-    st.dataframe(
-        display_metrics.style.format(
-            {column: "{:.3f}" for column in display_metrics.columns if column != "Model"}
-        ),
-        hide_index=True,
-        width="stretch",
-    )
-    st.caption(
-        f"The deployed XGBoost alert threshold is {saved_threshold:.1%}, selected using validation data. "
-        "The 0.50 columns use the standard cutoff."
-    )
+        display_metrics = display_metrics.rename(
+            columns={
+                "Test Accuracy (0.50)": "Accuracy @ 0.50",
+                "Test Precision (0.50)": "Precision @ 0.50",
+                "Test Recall (0.50)": "Recall @ 0.50",
+                "Test F1 (0.50)": "F1 @ 0.50",
+                "Test Accuracy (F1 threshold)": "Accuracy @ tuned threshold",
+                "Test Precision (F1 threshold)": "Precision @ tuned threshold",
+                "Test Recall (F1 threshold)": "Recall @ tuned threshold",
+                "Test F1 (F1 threshold)": "F1 @ tuned threshold",
+                "Test ROC-AUC": "ROC-AUC",
+            }
+        )
+        st.dataframe(
+            display_metrics.style.format(
+                {column: "{:.3f}" for column in display_metrics.columns if column != "Model"}
+            ),
+            hide_index=True,
+            width="stretch",
+        )
+        st.caption(
+            f"The deployed XGBoost alert cutoff is {saved_threshold:.1%}, selected using validation data. "
+            "The 0.50 columns use the standard cutoff."
+        )
 
     transformed_names = detector.named_steps["preprocessor"].get_feature_names_out()
     importances = detector.named_steps["model"].feature_importances_
@@ -725,32 +923,32 @@ else:
         .head(15)
         .set_index("Feature")
     )
-    st.markdown('<div class="section-heading">Top model signals</div>', unsafe_allow_html=True)
-    st.bar_chart(importance_table, horizontal=True, color="#087f8c")
-    st.caption("Importance indicates how much a feature contributed to model splits; it does not imply causation.")
+    with st.expander("Top model signals", expanded=False):
+        st.bar_chart(importance_table, horizontal=True, color="#bd583d")
+        st.caption("Feature importance describes model split usage; it does not imply causation.")
 
-    st.markdown('<div class="section-heading">Observed return patterns</div>', unsafe_allow_html=True)
-    left, right = st.columns(2)
-    with left:
-        rates = pd.Series(
-            {
-                item["name"]: float(item["return_rate"]) * 100
-                for item in insights["return_rate_by_product_category"]
-            },
-            name="Return rate (%)",
-        ).sort_values(ascending=False)
-        st.markdown("**Return rate by product category**")
-        st.bar_chart(rates, horizontal=True, color="#087f8c")
-    with right:
-        rates = pd.Series(
-            {
-                item["name"]: float(item["return_rate"]) * 100
-                for item in insights["return_rate_by_shipping_method"]
-            },
-            name="Return rate (%)",
-        ).sort_values(ascending=False)
-        st.markdown("**Return rate by shipping method**")
-        st.bar_chart(rates, horizontal=True, color="#4b9b8e")
+    with st.expander("Observed return patterns", expanded=False):
+        left, right = st.columns(2)
+        with left:
+            rates = pd.Series(
+                {
+                    item["name"]: float(item["return_rate"]) * 100
+                    for item in insights["return_rate_by_product_category"]
+                },
+                name="Return rate (%)",
+            ).sort_values(ascending=False)
+            st.markdown("**Return rate by product category**")
+            st.bar_chart(rates, horizontal=True, color="#bd583d")
+        with right:
+            rates = pd.Series(
+                {
+                    item["name"]: float(item["return_rate"]) * 100
+                    for item in insights["return_rate_by_shipping_method"]
+                },
+                name="Return rate (%)",
+            ).sort_values(ascending=False)
+            st.markdown("**Return rate by shipping method**")
+            st.bar_chart(rates, horizontal=True, color="#bd7d3d")
 
 st.markdown("---")
 st.markdown(
