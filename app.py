@@ -11,10 +11,10 @@ import streamlit as st
 
 
 ROOT_DIR = Path(__file__).resolve().parent
-DATASET_PATH = ROOT_DIR / "datasets" / "ecommerce_return_prediction_feature_engineered.csv"
 MODEL_PATH = ROOT_DIR / "models" / "best_return_detection_model.joblib"
 EVALUATION_PATH = ROOT_DIR / "models" / "model_evaluation.json"
 INSIGHTS_PATH = ROOT_DIR / "models" / "dashboard_insights.json"
+EDA_SUMMARY_PATH = ROOT_DIR / "models" / "dashboard_eda.json"
 
 RAW_FEATURES = [
     "customer_age",
@@ -493,41 +493,35 @@ def load_insights() -> dict[str, Any]:
 
 
 @st.cache_data
-def load_eda_data() -> pd.DataFrame:
-    if not DATASET_PATH.is_file():
-        raise FileNotFoundError(f"Exploratory dataset was not found: {DATASET_PATH}")
-    data = pd.read_csv(DATASET_PATH)
+def load_eda_summary() -> dict[str, Any]:
+    if not EDA_SUMMARY_PATH.is_file():
+        raise FileNotFoundError(f"Aggregate EDA results were not found: {EDA_SUMMARY_PATH}")
+    with EDA_SUMMARY_PATH.open(encoding="utf-8") as file:
+        summary = json.load(file)
+    if not isinstance(summary, dict):
+        raise ValueError("Aggregate EDA results must be a JSON object.")
     required_columns = {
-        "returned",
-        "order_date",
-        "product_category",
-        "shipping_method",
-        "coupon_used",
+        "total_orders",
+        "returned_orders",
+        "historical_return_rate",
+        "median_product_price",
+        "outcome_counts",
+        "return_rate_by_product_category",
+        "monthly_return_rates",
+        "return_rate_by_shipping_method",
+        "return_rate_by_delivery_status",
+        "return_rate_by_coupon",
+        "numeric_distributions",
+        "numeric_return_correlations",
+        "data_quality",
     }
-    missing = required_columns.difference(data.columns)
-    if data.empty or missing:
+    missing = required_columns.difference(summary)
+    if missing:
         raise ValueError(
-            "The exploratory dataset is empty or missing required columns: "
+            "Aggregate EDA results are missing required summaries: "
             + ", ".join(sorted(missing))
         )
-    target = pd.to_numeric(data["returned"], errors="coerce")
-    if target.isna().any() or not target.isin([0, 1]).all():
-        raise ValueError("The exploratory dataset's returned column must contain only 0 and 1.")
-    dates = pd.to_datetime(data["order_date"], errors="coerce")
-    if dates.isna().any():
-        raise ValueError("The exploratory dataset contains invalid order_date values.")
-    data["returned"] = target.astype(int)
-    data["order_date"] = dates
-    return data
-
-
-def summarize_return_rates(data: pd.DataFrame, column: str) -> pd.DataFrame:
-    return (
-        data.groupby(column, dropna=False, observed=True)["returned"]
-        .agg(orders="size", return_rate="mean")
-        .reset_index()
-        .sort_values("return_rate", ascending=False)
-    )
+    return summary
 
 
 def prepare_features(data: pd.DataFrame, expected_columns: list[str]) -> pd.DataFrame:
@@ -964,58 +958,49 @@ elif page == "Predict an order":
 
 elif page == "Exploratory analysis":
     try:
-        eda_data = load_eda_data()
+        eda_summary = load_eda_summary()
     except (FileNotFoundError, ValueError, OSError) as exc:
-        st.error(f"Could not load exploratory data: {exc}")
+        st.error(f"Could not load aggregate EDA results: {exc}")
         st.stop()
 
-    return_rate = float(eda_data["returned"].mean())
+    return_rate = float(eda_summary["historical_return_rate"])
     render_page_header(
         "EXPLORATORY DATA ANALYSIS",
         "Patterns behind product returns",
-        "Explore order outcomes, customer and product segments, delivery patterns, and the strength of numeric associations.",
+        "Explore aggregated order outcomes, customer and product segments, delivery patterns, and numeric associations.",
     )
 
     kpi_cols = st.columns(2, gap="medium")
-    kpi_cols[0].metric("Orders analyzed", f"{len(eda_data):,}")
-    kpi_cols[1].metric("Returned orders", f"{int(eda_data['returned'].sum()):,}")
+    kpi_cols[0].metric("Orders analyzed", f"{int(eda_summary['total_orders']):,}")
+    kpi_cols[1].metric("Returned orders", f"{int(eda_summary['returned_orders']):,}")
     kpi_cols = st.columns(2, gap="medium")
     kpi_cols[0].metric("Overall return rate", f"{return_rate:.1%}")
     kpi_cols[1].metric(
         "Median product price",
-        f"${eda_data['product_price_usd'].median():,.2f}"
-        if "product_price_usd" in eda_data
-        else "Not available",
+        f"${float(eda_summary['median_product_price']):,.2f}",
     )
 
-    returned_label = eda_data["returned"].map({0: "Not returned", 1: "Returned"})
-    outcome_counts = returned_label.value_counts().rename_axis("Outcome").to_frame("Orders")
-    category_rates = summarize_return_rates(eda_data, "product_category")
-    month_data = eda_data.assign(
-        order_month=pd.to_datetime(eda_data["order_date"], errors="coerce").dt.month
+    outcome_counts = (
+        pd.DataFrame(eda_summary["outcome_counts"])
+        .set_index("name")[["orders"]]
+        .rename_axis("Outcome")
+        .rename(columns={"orders": "Orders"})
     )
-    monthly_rates = (
-        month_data.groupby("order_month", dropna=True)["returned"]
-        .agg(orders="size", return_rate="mean")
-        .reset_index()
-        .rename(columns={"order_month": "Month"})
+    category_rates = pd.DataFrame(
+        eda_summary["return_rate_by_product_category"]
+    ).rename(columns={"name": "product_category"})
+    monthly_rates = pd.DataFrame(eda_summary["monthly_return_rates"]).rename(
+        columns={"month": "Month"}
     )
-    delay_column = "delivery_delay_days"
-    if delay_column in eda_data:
-        delay_data = eda_data.assign(
-            delivery_status=np.select(
-                [
-                    eda_data[delay_column].eq(0),
-                    eda_data[delay_column].le(2),
-                ],
-                ["On time", "1-2 days late"],
-                default="3+ days late",
-            )
-        )
-        delay_rates = summarize_return_rates(delay_data, "delivery_status")
-    else:
-        delay_rates = pd.DataFrame()
-    coupon_rates = summarize_return_rates(eda_data, "coupon_used")
+    shipping_rates = pd.DataFrame(
+        eda_summary["return_rate_by_shipping_method"]
+    ).rename(columns={"name": "shipping_method"})
+    delay_rates = pd.DataFrame(
+        eda_summary["return_rate_by_delivery_status"]
+    ).rename(columns={"name": "delivery_status"})
+    coupon_rates = pd.DataFrame(eda_summary["return_rate_by_coupon"]).rename(
+        columns={"name": "coupon_used"}
+    )
 
     st.markdown('<div class="section-heading">Order outcomes and category patterns</div>', unsafe_allow_html=True)
     left, right = st.columns(2, gap="small")
@@ -1039,14 +1024,13 @@ elif page == "Exploratory analysis":
     with left:
         st.markdown("**Monthly return rate**")
         st.line_chart(
-            monthly_rates.set_index("Month")[["return_rate"]],
+            monthly_rates.set_index("Month")[["return_rate"]].rename_axis("Month"),
             color="#bd583d",
             height=210,
         )
         st.caption("Monthly rates are descriptive; they do not establish a seasonal cause.")
     with right:
         st.markdown("**Return rate by shipping method**")
-        shipping_rates = summarize_return_rates(eda_data, "shipping_method")
         st.bar_chart(
             shipping_rates.set_index("shipping_method")[["return_rate"]].rename(
                 columns={"return_rate": "Return rate"}
@@ -1060,38 +1044,22 @@ elif page == "Exploratory analysis":
     left, right = st.columns(2, gap="small")
     with left:
         st.markdown("**Return rate by delivery delay**")
-        if not delay_rates.empty:
-            st.bar_chart(
-                delay_rates.set_index("delivery_status")[["return_rate"]].rename(
-                    columns={"return_rate": "Return rate"}
-                ),
-                horizontal=True,
-                color="#bd7d3d",
-                height=210,
-            )
-        else:
-            st.info("Delivery-delay data is not available in this dataset.")
-    with right:
-        distribution_options = [
-            column
-            for column in [
-                "customer_age",
-                "product_price_usd",
-                "discount_percent",
-                "product_rating",
-                "past_purchase_count",
-                "delivery_delay_days",
-            ]
-            if column in eda_data
-        ]
-        distribution_column = st.selectbox("Numeric feature", distribution_options)
-        distribution_bins = pd.cut(eda_data[distribution_column].dropna(), bins=10)
-        distribution_counts = (
-            distribution_bins.value_counts(sort=False)
-            .rename_axis("Range")
-            .to_frame("Orders")
+        st.bar_chart(
+            delay_rates.set_index("delivery_status")[["return_rate"]].rename(
+                columns={"return_rate": "Return rate"}
+            ),
+            horizontal=True,
+            color="#bd7d3d",
+            height=210,
         )
-        distribution_counts.index = distribution_counts.index.astype(str)
+    with right:
+        distribution_options = list(eda_summary["numeric_distributions"])
+        distribution_column = st.selectbox("Numeric feature", distribution_options)
+        distribution_counts = pd.DataFrame(
+            eda_summary["numeric_distributions"][distribution_column]
+        ).set_index("range")[["orders"]].rename(
+            columns={"orders": "Orders"}
+        )
         st.markdown(f"**Distribution of {distribution_column.replace('_', ' ')}**")
         st.bar_chart(distribution_counts, color="#bd583d", height=210)
 
@@ -1107,24 +1075,13 @@ elif page == "Exploratory analysis":
             height=190,
         )
     with right:
-        numeric_candidates = [
-            column
-            for column in [
-                "customer_age",
-                "product_price_usd",
-                "discount_percent",
-                "product_rating",
-                "past_return_rate_pct",
-                "delivery_delay_days",
-            ]
-            if column in eda_data
-        ]
-        numeric_correlations = (
-            eda_data[numeric_candidates]
-            .corrwith(eda_data["returned"], method="spearman")
-            .dropna()
-            .sort_values()
-            .to_frame("Spearman correlation with return")
+        numeric_correlations = pd.DataFrame(
+            eda_summary["numeric_return_correlations"]
+        ).set_index("name")[["correlation"]].rename(
+            columns={"correlation": "Spearman correlation with return"}
+        )
+        numeric_correlations = numeric_correlations.sort_values(
+            "Spearman correlation with return"
         )
         st.markdown("**Numeric associations with returns**")
         st.bar_chart(
@@ -1135,9 +1092,9 @@ elif page == "Exploratory analysis":
         )
         st.caption("Associations are not causal effects; values near zero have little monotonic relationship.")
 
-    top_category = category_rates.iloc[0]
-    low_category = category_rates.iloc[-1]
-    top_coupon = coupon_rates.iloc[0]
+    top_category = category_rates.loc[category_rates["return_rate"].idxmax()]
+    low_category = category_rates.loc[category_rates["return_rate"].idxmin()]
+    top_coupon = coupon_rates.loc[coupon_rates["return_rate"].idxmax()]
     insight_text = (
         f"**Category spread:** {top_category['product_category']} has the highest observed "
         f"return rate ({top_category['return_rate']:.1%}); "
@@ -1155,13 +1112,11 @@ elif page == "Exploratory analysis":
         display_rates["Return rate"] = display_rates["Return rate"].map(lambda value: f"{value:.1%}")
         st.dataframe(display_rates, hide_index=True, width="stretch")
         st.markdown("**Data quality**")
-        quality = pd.DataFrame(
-            {
-                "Missing values": eda_data.isna().sum(),
-                "Distinct values": eda_data.nunique(dropna=True),
-            }
-        )
-        st.dataframe(quality, width="stretch")
+        quality = eda_summary["data_quality"]
+        quality_columns = st.columns(3)
+        quality_columns[0].metric("Missing values", f"{quality['missing_values']:,}")
+        quality_columns[1].metric("Duplicate rows", f"{quality['duplicate_rows']:,}")
+        quality_columns[2].metric("Source columns", f"{quality['columns']:,}")
 
 elif page == "Model evaluation":
     render_page_header(

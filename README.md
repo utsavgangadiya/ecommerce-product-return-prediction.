@@ -68,7 +68,7 @@ The dashboard provides:
 
 - **Overview:** dataset-level return rate, evaluation highlights, and aggregate return rates by product category.
 - **Predict an order:** enter customer, product, order, and delivery details to get an estimated score and review recommendation.
-- **Exploratory analysis:** inspect return distributions, category and delivery patterns, monthly trends, coupon use, and numeric associations.
+- **Exploratory analysis:** inspect aggregate return distributions, category and delivery patterns, monthly trends, coupon use, and numeric associations. The deployed page reads a compact aggregate JSON so raw order-level data does not need to be committed.
 - **Model evaluation:** see the deployed model's held-out accuracy only. Accuracy can be misleading on an imbalanced target; the executed `notebooks/06_model_evaluation.ipynb` contains the data-quality audit, class-imbalance baseline, feature engineering, stratified cross-validation, and supporting evaluation metrics.
 
 Individual Logistic Regression predictions include per-order feature contributions. A review flag is a recommendation for closer inspection, not a confirmed return.
@@ -98,6 +98,8 @@ Individual Logistic Regression predictions include per-order feature contributio
 ```
 
 The notebooks document data understanding, EDA, preprocessing, engineering, model training, and evaluation. `train_model.py` trains and compares the candidate models, runs expanding-window cross-validation, selects a validation threshold, and evaluates the chosen model once on the final chronological holdout. The app loads those saved artifacts.
+
+The raw dataset is excluded from Git. Before updating aggregate EDA results, place the feature-engineered dataset in `datasets/` and run `python build_dashboard_eda.py`. Commit the generated `models/dashboard_eda.json`; the deployed app uses this summary and does not require the raw CSV.
 
 ## Run the dashboard locally
 

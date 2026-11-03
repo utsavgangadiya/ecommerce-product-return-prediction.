@@ -41,6 +41,7 @@ models/*
 !models/model_validation_comparison.csv
 !models/model_evaluation.json
 !models/dashboard_insights.json
+!models/dashboard_eda.json
 
 # OS files
 .DS_Store
