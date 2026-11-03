@@ -34,10 +34,12 @@ dist/
 datasets/*
 !datasets/.gitkeep
 
-# Keep only the model and metrics needed by the deployed dashboard.
+# Keep only the model and aggregate metrics needed by the deployed dashboard.
 models/*
 !models/best_return_detection_model.joblib
 !models/two_model_comparison_metrics.csv
+!models/model_validation_comparison.csv
+!models/model_evaluation.json
 !models/dashboard_insights.json
 
 # OS files

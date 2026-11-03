@@ -1,0 +1,83 @@
+{
+  "model_name": "Logistic Regression (accuracy-first, C=0.03)",
+  "threshold": 0.5,
+  "threshold_selection": "Default probability threshold of 0.5; not tuned against the holdout",
+  "model_selection": "Highest mean accuracy among unweighted and class-weighted Logistic Regression using 5-fold StratifiedKFold on the training partition",
+  "cv_metrics": {
+    "accuracy_mean": 0.8183315962703469,
+    "accuracy_std": 0.0004251931284489213,
+    "balanced_accuracy_mean": 0.5040128932261154,
+    "returned_recall_mean": 0.0096589728060534
+  },
+  "majority_baseline_cv_metrics": {
+    "accuracy_mean": 0.8179085873990338,
+    "accuracy_std": 4.1477097400423355e-05,
+    "balanced_accuracy_mean": 0.5,
+    "returned_recall_mean": 0.0
+  },
+  "validation_metrics": {
+    "Validation threshold": 0.5,
+    "Validation precision": 0.7058823529411765,
+    "Validation recall": 0.008683068017366137,
+    "Validation F1": 0.017155110793423873,
+    "Validation ROC-AUC": 0.6424169142102724,
+    "Validation PR-AUC": 0.2916985464060947,
+    "Validation Brier": 0.1434814783359664,
+    "Validation accuracy": 0.8175908729105864
+  },
+  "test_period_start": "2024-09-30",
+  "test_period_end": "2024-12-30",
+  "test_rows": 7545,
+  "test_return_rate": 0.1855533465871438,
+  "test_metrics": {
+    "accuracy": 0.8148442677269715,
+    "precision": 0.5555555555555556,
+    "recall": 0.010714285714285714,
+    "f1": 0.02102312543798178,
+    "roc_auc": 0.6329830291758689,
+    "pr_auc": 0.2883578365216015,
+    "brier_score": 0.1454655052037128
+  },
+  "confusion_matrix": {
+    "true_negative": 6133,
+    "false_positive": 12,
+    "false_negative": 1385,
+    "true_positive": 15
+  },
+  "classification_report": {
+    "Not returned": {
+      "precision": 0.8157754722000532,
+      "recall": 0.9980471928397071,
+      "f1-score": 0.8977530556978701,
+      "support": 6145.0
+    },
+    "Returned": {
+      "precision": 0.5555555555555556,
+      "recall": 0.010714285714285714,
+      "f1-score": 0.02102312543798178,
+      "support": 1400.0
+    },
+    "accuracy": 0.8148442677269715,
+    "macro avg": {
+      "precision": 0.6856655138778044,
+      "recall": 0.5043807392769964,
+      "f1-score": 0.45938809056792596,
+      "support": 7545.0
+    },
+    "weighted avg": {
+      "precision": 0.767490795818039,
+      "recall": 0.8148442677269715,
+      "f1-score": 0.7350728830850346,
+      "support": 7545.0
+    }
+  },
+  "calibration_experiment": {
+    "method": "Sigmoid calibration with expanding-window cross-validation",
+    "uncalibrated_validation_brier": 0.23405433910549256,
+    "calibrated_validation_brier": 0.1438011657122699,
+    "uncalibrated_validation_f1": 0.3592138548355711,
+    "calibrated_validation_f1": 0.35691946833463645,
+    "decision": "Keep the uncalibrated score to prioritize F1; label it as a model score, not a calibrated probability."
+  },
+  "test_note": "The latest chronological partition is reserved for final evaluation and is not used for fitting, candidate selection, cross-validation, or threshold tuning."
+}

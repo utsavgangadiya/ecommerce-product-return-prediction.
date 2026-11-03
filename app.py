@@ -11,8 +11,9 @@ import streamlit as st
 
 
 ROOT_DIR = Path(__file__).resolve().parent
+DATASET_PATH = ROOT_DIR / "datasets" / "ecommerce_return_prediction_feature_engineered.csv"
 MODEL_PATH = ROOT_DIR / "models" / "best_return_detection_model.joblib"
-METRICS_PATH = ROOT_DIR / "models" / "two_model_comparison_metrics.csv"
+EVALUATION_PATH = ROOT_DIR / "models" / "model_evaluation.json"
 INSIGHTS_PATH = ROOT_DIR / "models" / "dashboard_insights.json"
 
 RAW_FEATURES = [
@@ -107,8 +108,8 @@ st.markdown(
     [data-testid="stHeader"] { background: transparent; }
     [data-testid="stMainBlockContainer"] {
         max-width: 1440px;
-        padding-top: 2rem;
-        padding-bottom: 3rem;
+        padding-top: 1.5rem;
+        padding-bottom: 2rem;
     }
     [data-testid="stSidebar"] {
         background: #272d29;
@@ -178,14 +179,14 @@ st.markdown(
         color: var(--muted);
         font-size: 14px;
         line-height: 1.65;
-        margin: 0 0 23px;
+        margin: 0 0 16px;
     }
     .section-heading {
         color: var(--ink);
         font-family: Georgia, 'Times New Roman', serif;
         font-size: 21px;
         font-weight: 700;
-        margin: 26px 0 12px;
+        margin: 18px 0 8px;
     }
     .hero-card {
         display: grid;
@@ -361,15 +362,15 @@ st.markdown(
         border-radius: 10px;
         padding: 22px;
     }
-    div[data-testid="stFileUploader"] section {
-        background: var(--panel);
-        border: 1px dashed #c9c1b6;
-        border-radius: 9px;
-    }
     div[data-testid="stDataFrame"] {
         border: 1px solid var(--line);
         border-radius: 8px;
         overflow: hidden;
+    }
+    div[data-testid="stFileUploader"] section {
+        background: var(--panel);
+        border: 1px dashed #c9c1b6;
+        border-radius: 9px;
     }
     div[data-testid="stExpander"] {
         background: var(--panel);
@@ -415,20 +416,63 @@ st.markdown(
 
 
 @st.cache_resource
-def load_detector() -> tuple[Any, float]:
+def load_detector(
+    artifact_modified_ns: int,
+    artifact_size_bytes: int,
+) -> tuple[Any, float, str]:
     if not MODEL_PATH.is_file():
         raise FileNotFoundError(f"Trained model was not found: {MODEL_PATH}")
+    artifact_stat = MODEL_PATH.stat()
+    if (
+        artifact_stat.st_mtime_ns != artifact_modified_ns
+        or artifact_stat.st_size != artifact_size_bytes
+    ):
+        raise ValueError("The model artifact changed while the dashboard was loading. Rerun the app.")
     artifact = joblib.load(MODEL_PATH)
     if not isinstance(artifact, dict) or "model" not in artifact or "threshold" not in artifact:
         raise ValueError("The saved return-detection artifact is missing its model or threshold.")
-    return artifact["model"], float(artifact["threshold"])
+    model = artifact["model"]
+    threshold = float(artifact["threshold"])
+    model_name = str(artifact.get("model_name", type(model).__name__))
+    if not hasattr(model, "predict_proba"):
+        raise ValueError("The saved return-detection model does not support probability predictions.")
+    if not np.isfinite(threshold) or not 0 <= threshold <= 1:
+        raise ValueError("The saved decision threshold must be between 0 and 1.")
+    if not hasattr(model, "feature_names_in_"):
+        raise ValueError("The saved model does not expose its training feature names.")
+    return model, threshold, model_name
 
 
 @st.cache_data
-def load_metrics() -> pd.DataFrame:
-    if not METRICS_PATH.is_file():
-        raise FileNotFoundError(f"Evaluation metrics were not found: {METRICS_PATH}")
-    return pd.read_csv(METRICS_PATH)
+def load_evaluation(
+    artifact_modified_ns: int,
+    artifact_size_bytes: int,
+) -> dict[str, Any]:
+    if not EVALUATION_PATH.is_file():
+        raise FileNotFoundError(f"Model evaluation results were not found: {EVALUATION_PATH}")
+    artifact_stat = EVALUATION_PATH.stat()
+    if (
+        artifact_stat.st_mtime_ns != artifact_modified_ns
+        or artifact_stat.st_size != artifact_size_bytes
+    ):
+        raise ValueError("The evaluation artifact changed while the dashboard was loading. Rerun the app.")
+    with EVALUATION_PATH.open(encoding="utf-8") as file:
+        evaluation = json.load(file)
+    required_keys = {
+        "model_name",
+        "test_metrics",
+    }
+    if not isinstance(evaluation, dict) or not required_keys.issubset(evaluation):
+        raise ValueError("The saved model evaluation is missing required test results.")
+    test_metrics = evaluation["test_metrics"]
+    if (
+        not isinstance(test_metrics, dict)
+        or "accuracy" not in test_metrics
+        or not np.isfinite(test_metrics["accuracy"])
+        or not 0 <= test_metrics["accuracy"] <= 1
+    ):
+        raise ValueError("The saved model evaluation has an invalid test accuracy.")
+    return evaluation
 
 
 @st.cache_data
@@ -448,11 +492,63 @@ def load_insights() -> dict[str, Any]:
     return insights
 
 
+@st.cache_data
+def load_eda_data() -> pd.DataFrame:
+    if not DATASET_PATH.is_file():
+        raise FileNotFoundError(f"Exploratory dataset was not found: {DATASET_PATH}")
+    data = pd.read_csv(DATASET_PATH)
+    required_columns = {
+        "returned",
+        "order_date",
+        "product_category",
+        "shipping_method",
+        "coupon_used",
+    }
+    missing = required_columns.difference(data.columns)
+    if data.empty or missing:
+        raise ValueError(
+            "The exploratory dataset is empty or missing required columns: "
+            + ", ".join(sorted(missing))
+        )
+    target = pd.to_numeric(data["returned"], errors="coerce")
+    if target.isna().any() or not target.isin([0, 1]).all():
+        raise ValueError("The exploratory dataset's returned column must contain only 0 and 1.")
+    dates = pd.to_datetime(data["order_date"], errors="coerce")
+    if dates.isna().any():
+        raise ValueError("The exploratory dataset contains invalid order_date values.")
+    data["returned"] = target.astype(int)
+    data["order_date"] = dates
+    return data
+
+
+def summarize_return_rates(data: pd.DataFrame, column: str) -> pd.DataFrame:
+    return (
+        data.groupby(column, dropna=False, observed=True)["returned"]
+        .agg(orders="size", return_rate="mean")
+        .reset_index()
+        .sort_values("return_rate", ascending=False)
+    )
+
+
 def prepare_features(data: pd.DataFrame, expected_columns: list[str]) -> pd.DataFrame:
     frame = data.copy()
     frame.columns = frame.columns.astype(str).str.strip()
     if frame.empty:
-        raise ValueError("The uploaded file contains no order rows.")
+        raise ValueError("The order record contains no data.")
+    outcome_columns = {
+        "returned",
+        "return_rate_pct",
+        "return_date",
+        "days_to_return",
+        "return_reason",
+        "refund_amount_usd",
+    }
+    leaked_columns = sorted(outcome_columns.intersection(frame.columns))
+    if leaked_columns:
+        raise ValueError(
+            "Remove outcome or post-order fields before scoring: "
+            + ", ".join(leaked_columns)
+        )
 
     missing = [column for column in RAW_FEATURES if column not in frame.columns]
     if missing:
@@ -464,7 +560,7 @@ def prepare_features(data: pd.DataFrame, expected_columns: list[str]) -> pd.Data
     if "order_date" in frame.columns:
         dates = pd.to_datetime(frame["order_date"], errors="coerce")
         if dates.isna().any():
-            raise ValueError("Some order_date values are invalid. Use dates such as 2025-04-18.")
+            raise ValueError("The order_date is invalid. Use a date such as 2025-04-18.")
         frame["order_month"] = dates.dt.month
         frame["order_day_of_week"] = dates.dt.dayofweek
         frame["is_weekend"] = (dates.dt.dayofweek >= 5).astype(int)
@@ -477,8 +573,19 @@ def prepare_features(data: pd.DataFrame, expected_columns: list[str]) -> pd.Data
     if "order_date" not in frame.columns:
         frame["is_weekend"] = (pd.to_numeric(frame["order_day_of_week"]) >= 5).astype(int)
 
-    for column in CATEGORY_OPTIONS:
+    invalid_categories: list[str] = []
+    for column, options in CATEGORY_OPTIONS.items():
         frame[column] = frame[column].astype("string").str.strip()
+        unknown = frame[column].isna() | ~frame[column].isin(options)
+        if unknown.any():
+            invalid_categories.append(
+                f"{column} (allowed: {', '.join(options)})"
+            )
+    if invalid_categories:
+        raise ValueError(
+            "These categorical fields contain missing or unsupported values: "
+            + "; ".join(invalid_categories)
+        )
 
     frame["purchase_frequency_group"] = pd.cut(
         pd.to_numeric(frame["past_purchase_count"]),
@@ -547,6 +654,53 @@ def classify_score(score: float, threshold: float) -> tuple[str, str]:
     return "Lower return risk", "low"
 
 
+def explain_linear_prediction(
+    model: Any,
+    features: pd.DataFrame,
+) -> pd.DataFrame | None:
+    estimator = model.named_steps.get("model")
+    preprocessor = model.named_steps.get("preprocessor")
+    if estimator is None or preprocessor is None or not hasattr(estimator, "coef_"):
+        return None
+
+    transformed = preprocessor.transform(features)
+    if hasattr(transformed, "toarray"):
+        transformed = transformed.toarray()
+    contributions = np.asarray(transformed)[0] * estimator.coef_[0]
+    transformed_names = preprocessor.get_feature_names_out()
+    original_features = list(features.columns)
+    grouped: dict[str, float] = {}
+    for name, contribution in zip(transformed_names, contributions):
+        transformed_name = str(name).split("__", maxsplit=1)[-1]
+        source = next(
+            (
+                column
+                for column in original_features
+                if transformed_name == column
+                or transformed_name.startswith(f"{column}_")
+            ),
+            transformed_name,
+        )
+        grouped[source] = grouped.get(source, 0.0) + float(contribution)
+
+    explanation = pd.DataFrame(
+        [
+            {
+                "Feature": feature,
+                "Contribution to score": contribution,
+                "Direction": "Raises score" if contribution > 0 else "Lowers score",
+            }
+            for feature, contribution in grouped.items()
+        ]
+    )
+    return (
+        explanation.assign(_absolute=explanation["Contribution to score"].abs())
+        .sort_values("_absolute", ascending=False)
+        .drop(columns="_absolute")
+        .head(8)
+    )
+
+
 def render_page_header(eyebrow: str, title: str, subtitle: str) -> None:
     st.markdown(
         f"""
@@ -559,8 +713,16 @@ def render_page_header(eyebrow: str, title: str, subtitle: str) -> None:
 
 
 try:
-    detector, saved_threshold = load_detector()
-    metrics = load_metrics()
+    model_stat = MODEL_PATH.stat()
+    evaluation_stat = EVALUATION_PATH.stat()
+    detector, saved_threshold, model_name = load_detector(
+        model_stat.st_mtime_ns,
+        model_stat.st_size,
+    )
+    evaluation = load_evaluation(
+        evaluation_stat.st_mtime_ns,
+        evaluation_stat.st_size,
+    )
     insights = load_insights()
 except (FileNotFoundError, ValueError, OSError) as exc:
     st.error(f"Dashboard setup error: {exc}")
@@ -568,11 +730,9 @@ except (FileNotFoundError, ValueError, OSError) as exc:
     st.stop()
 
 expected_features = list(detector.feature_names_in_)
-xgb_row = metrics.loc[metrics["Model"].eq("XGBoost")]
-if xgb_row.empty:
-    st.error("XGBoost evaluation metrics are missing from the saved comparison.")
+if evaluation["model_name"] != model_name:
+    st.error("The deployed model and saved evaluation result refer to different models.")
     st.stop()
-xgb_metrics = xgb_row.iloc[0]
 
 with st.sidebar:
     st.markdown(
@@ -585,13 +745,17 @@ with st.sidebar:
     )
     page = st.radio(
         "YOUR WORKSPACE",
-        ["Overview", "Predict an order", "Score a file", "Insights & model"],
+        [
+            "Overview",
+            "Predict an order",
+            "Exploratory analysis",
+            "Model evaluation",
+        ],
         label_visibility="visible",
     )
     st.markdown("---")
     st.caption("CURRENT DETECTOR")
-    st.markdown("**XGBoost · return review**")
-    st.caption("Review score uses a validation-tuned cutoff")
+    st.markdown(f"**{model_name} · return review**")
 
 threshold = float(saved_threshold)
 
@@ -602,7 +766,7 @@ if page == "Overview":
     render_page_header(
         "RETURNS DESK  /  PORTFOLIO",
         "A clearer view of what comes back.",
-        "A practical snapshot of historical orders and how well the return detector finds them.",
+        "A practical snapshot of historical order volume and customer return patterns.",
     )
     st.markdown(
         f"""
@@ -619,7 +783,7 @@ if page == "Overview":
             <div class="hero-aside">
                 <span class="hero-aside-label">For the team</span>
                 <strong>Start with the order. Let the data add context.</strong>
-                <span>Score a single order or a whole file, then review the details before acting.</span>
+                <span>Score an individual order, then review its details before acting.</span>
             </div>
         </div>
         """,
@@ -629,17 +793,20 @@ if page == "Overview":
     kpi_cols = st.columns(4, gap="medium")
     kpi_cols[0].metric("Orders", f"{total_orders:,}")
     kpi_cols[1].metric("Returned", f"{returned_orders:,}")
-    kpi_cols[2].metric("Detector ROC-AUC", f"{xgb_metrics['Test ROC-AUC']:.3f}")
-    kpi_cols[3].metric("Return recall", f"{xgb_metrics['Test Recall (F1 threshold)']:.1%}")
+    kpi_cols[2].metric(
+        "Product categories",
+        f"{len(insights['return_rate_by_product_category']):,}",
+    )
+    kpi_cols[3].metric(
+        "Shipping methods",
+        f"{len(insights['return_rate_by_shipping_method']):,}",
+    )
 
     st.markdown(
-        f"""
+        """
         <div class="note-card">
-            <strong>Reading the model:</strong> The test-set return rate is
-            {historical_return_rate:.1%}. At its validation-selected review cutoff, the detector
-            found {xgb_metrics['Test Recall (F1 threshold)']:.1%} of returned orders, and
-            {xgb_metrics['Test Precision (F1 threshold)']:.1%} of flagged orders were returns.
-            Accuracy alone can hide missed returns when most orders are kept.
+            Historical return rates describe this dataset, not a forecast.
+            The model's held-out evaluation is available on the separate Model evaluation page.
         </div>
         """,
         unsafe_allow_html=True,
@@ -657,38 +824,32 @@ if page == "Overview":
         ).sort_values(ascending=False)
         st.bar_chart(category_rates, horizontal=True, color="#bd583d")
     with right:
-        st.markdown('<div class="section-heading">How the detector performed</div>', unsafe_allow_html=True)
-        snapshot = pd.DataFrame(
+        st.markdown('<div class="section-heading">Returns by shipping method</div>', unsafe_allow_html=True)
+        shipping_rates = pd.Series(
             {
-                "Measure": ["Precision · flagged orders that returned", "Recall · returns found", "F1 · precision and recall balance", "ROC-AUC · ranking quality"],
-                "Result": [
-                    xgb_metrics["Test Precision (F1 threshold)"],
-                    xgb_metrics["Test Recall (F1 threshold)"],
-                    xgb_metrics["Test F1 (F1 threshold)"],
-                    xgb_metrics["Test ROC-AUC"],
-                ],
-            }
-        )
-        snapshot["Result"] = snapshot["Result"].map(lambda value: f"{value:.3f}")
-        st.dataframe(snapshot, hide_index=True, width="stretch")
-        st.caption("Held-out test results. The review cutoff was chosen on validation data.")
+                item["name"]: float(item["return_rate"]) * 100
+                for item in insights["return_rate_by_shipping_method"]
+            },
+            name="Return rate (%)",
+        ).sort_values(ascending=False)
+        st.bar_chart(shipping_rates, horizontal=True, color="#bd7d3d")
 
 elif page == "Predict an order":
     render_page_header(
         "ORDER SCORING",
         "Predict return risk",
-        "Enter the order details below. The saved XGBoost model will return an estimated score and a review recommendation.",
+        f"Enter the order details below. {model_name} will return an estimated score and a review recommendation.",
     )
 
     with st.expander("Decision threshold", expanded=False):
         threshold = st.slider(
             "Flag an order for review when its score is at least",
-            min_value=0.05,
-            max_value=0.80,
-            value=float(np.clip(saved_threshold, 0.05, 0.80)),
-            step=0.01,
+            min_value=0.0,
+            max_value=1.0,
+            value=float(saved_threshold),
+            step=0.005,
             format="%.2f",
-            help="The default is the threshold chosen on validation data. Raising it reduces reviews but may miss more returns.",
+            help="The default was selected on the validation period. Raising it reduces reviews but may miss more returns.",
         )
 
     with st.form("single_order_form"):
@@ -751,8 +912,12 @@ elif page == "Predict an order":
                 }
             ]
         )
-        features = prepare_features(order, expected_features)
-        score = float(detector.predict_proba(features)[0, 1])
+        try:
+            features = prepare_features(order, expected_features)
+            score = float(detector.predict_proba(features)[0, 1])
+        except (ValueError, KeyError) as exc:
+            st.error(f"Could not score this order: {exc}")
+            st.stop()
         label, risk_level = classify_score(score, threshold)
         st.markdown("---")
         st.markdown(
@@ -779,176 +944,238 @@ elif page == "Predict an order":
             st.info("This order meets the model's review threshold. Check the order details before taking action.")
         else:
             st.success("This order is below the current review threshold.")
-        st.caption("This is a model score, not a guarantee. Use it to support—not replace—business decisions.")
-
-elif page == "Score a file":
-    render_page_header(
-        "BATCH SCORING",
-        "Score multiple orders",
-        "Upload a CSV with one order per row, or download the template to check the required columns.",
-    )
-
-    template = pd.DataFrame(
-        [
-            {
-                "order_date": "2025-04-18",
-                "customer_age": 35,
-                "country": "US",
-                "device_type": "Mobile",
-                "product_category": "Clothing",
-                "product_price_usd": 65.0,
-                "discount_percent": 10.0,
-                "coupon_used": "No",
-                "product_rating": 4.0,
-                "past_purchase_count": 8,
-                "past_return_rate_pct": 10.0,
-                "session_length_minutes": 12.0,
-                "num_product_views": 8,
-                "shipping_method": "Standard",
-                "delivery_time_days": 4,
-                "delivery_delay_days": 0,
-                "payment_method": "Credit Card",
-                "total_orders_lifetime": 9,
-                "total_returns_lifetime": 1,
-            }
-        ]
-    )
-    st.download_button(
-        "Download CSV template",
-        data=template.to_csv(index=False).encode("utf-8"),
-        file_name="return_prediction_template.csv",
-        mime="text/csv",
-    )
-    st.markdown(
-        '<div class="note-card">Required inputs are customer, product, purchase-history, shipping, and payment fields shown in the template. The app creates purchase-frequency, price, and return-history groups from those values. An order date is required to generate calendar features.</div>',
-        unsafe_allow_html=True,
-    )
-    upload = st.file_uploader("Choose an order CSV", type=["csv"])
-    if upload is not None and st.button("Score uploaded orders", type="primary"):
-        try:
-            uploaded_data = pd.read_csv(upload)
-            batch_features = prepare_features(uploaded_data, expected_features)
-            scores = detector.predict_proba(batch_features)[:, 1]
-            predictions = (scores >= threshold).astype(int)
-            result = uploaded_data.copy()
-            result["estimated_return_score"] = scores
-            result["return_risk"] = [
-                classify_score(float(score), threshold)[0] for score in scores
-            ]
-            result["flag_for_review"] = predictions
-            result = result.sort_values("estimated_return_score", ascending=False)
-        except (ValueError, KeyError, pd.errors.ParserError) as exc:
-            st.error(f"Could not score this file: {exc}")
-        else:
-            flagged = int(result["flag_for_review"].sum())
-            first, second, third = st.columns(3)
-            first.metric("Orders scored", f"{len(result):,}")
-            second.metric("Flagged for review", f"{flagged:,}")
-            third.metric("Flagged share", f"{flagged / len(result):.1%}" if len(result) else "0.0%")
-            st.dataframe(result, hide_index=True, width="stretch")
-            st.download_button(
-                "Download scored orders",
-                data=result.to_csv(index=False).encode("utf-8"),
-                file_name="scored_return_risk.csv",
-                mime="text/csv",
-            )
-
-else:
-    render_page_header(
-        "MODEL TRANSPARENCY",
-        "Insights and model performance",
-        "A concise view of how the return detector performs, with supporting detail when you need it.",
-    )
-    st.markdown(
-        """
-        <div class="note-card">
-            The deployed XGBoost model is tuned to catch returned orders. The scores below
-            summarize its held-out test results; expand the sections below for the full
-            comparison and supporting charts.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    recall_col, precision_col = st.columns(2, gap="medium")
-    recall_col.metric("Returns found · test recall", f"{xgb_metrics['Test Recall (F1 threshold)']:.1%}")
-    precision_col.metric("Flagged orders returned · test precision", f"{xgb_metrics['Test Precision (F1 threshold)']:.1%}")
-
-    with st.expander("Detailed model comparison", expanded=False):
-        display_metrics = metrics.copy()
-        display_metrics = display_metrics[
-            [
-                "Model",
-                "Test Accuracy (0.50)",
-                "Test Precision (0.50)",
-                "Test Recall (0.50)",
-                "Test F1 (0.50)",
-                "Test Accuracy (F1 threshold)",
-                "Test Precision (F1 threshold)",
-                "Test Recall (F1 threshold)",
-                "Test F1 (F1 threshold)",
-                "Test ROC-AUC",
-            ]
-        ]
-        display_metrics = display_metrics.rename(
-            columns={
-                "Test Accuracy (0.50)": "Accuracy @ 0.50",
-                "Test Precision (0.50)": "Precision @ 0.50",
-                "Test Recall (0.50)": "Recall @ 0.50",
-                "Test F1 (0.50)": "F1 @ 0.50",
-                "Test Accuracy (F1 threshold)": "Accuracy @ tuned threshold",
-                "Test Precision (F1 threshold)": "Precision @ tuned threshold",
-                "Test Recall (F1 threshold)": "Recall @ tuned threshold",
-                "Test F1 (F1 threshold)": "F1 @ tuned threshold",
-                "Test ROC-AUC": "ROC-AUC",
-            }
-        )
-        st.dataframe(
-            display_metrics.style.format(
-                {column: "{:.3f}" for column in display_metrics.columns if column != "Model"}
-            ),
-            hide_index=True,
-            width="stretch",
-        )
         st.caption(
-            f"The deployed XGBoost alert cutoff is {saved_threshold:.1%}, selected using validation data. "
-            "The 0.50 columns use the standard cutoff."
+            "This is a model score, not a guarantee. Use it to support—not replace—business decisions."
+        )
+        explanation = explain_linear_prediction(detector, features)
+        if explanation is not None:
+            with st.expander("Why did the model assign this score?", expanded=False):
+                st.dataframe(
+                    explanation.style.format(
+                        {"Contribution to score": "{:+.3f}"}
+                    ),
+                    hide_index=True,
+                    width="stretch",
+                )
+                st.caption(
+                    "Contributions are in model log-odds space and describe this prediction; "
+                    "they are not causal effects."
+                )
+
+elif page == "Exploratory analysis":
+    try:
+        eda_data = load_eda_data()
+    except (FileNotFoundError, ValueError, OSError) as exc:
+        st.error(f"Could not load exploratory data: {exc}")
+        st.stop()
+
+    return_rate = float(eda_data["returned"].mean())
+    render_page_header(
+        "EXPLORATORY DATA ANALYSIS",
+        "Patterns behind product returns",
+        "Explore order outcomes, customer and product segments, delivery patterns, and the strength of numeric associations.",
+    )
+
+    kpi_cols = st.columns(2, gap="medium")
+    kpi_cols[0].metric("Orders analyzed", f"{len(eda_data):,}")
+    kpi_cols[1].metric("Returned orders", f"{int(eda_data['returned'].sum()):,}")
+    kpi_cols = st.columns(2, gap="medium")
+    kpi_cols[0].metric("Overall return rate", f"{return_rate:.1%}")
+    kpi_cols[1].metric(
+        "Median product price",
+        f"${eda_data['product_price_usd'].median():,.2f}"
+        if "product_price_usd" in eda_data
+        else "Not available",
+    )
+
+    returned_label = eda_data["returned"].map({0: "Not returned", 1: "Returned"})
+    outcome_counts = returned_label.value_counts().rename_axis("Outcome").to_frame("Orders")
+    category_rates = summarize_return_rates(eda_data, "product_category")
+    month_data = eda_data.assign(
+        order_month=pd.to_datetime(eda_data["order_date"], errors="coerce").dt.month
+    )
+    monthly_rates = (
+        month_data.groupby("order_month", dropna=True)["returned"]
+        .agg(orders="size", return_rate="mean")
+        .reset_index()
+        .rename(columns={"order_month": "Month"})
+    )
+    delay_column = "delivery_delay_days"
+    if delay_column in eda_data:
+        delay_data = eda_data.assign(
+            delivery_status=np.select(
+                [
+                    eda_data[delay_column].eq(0),
+                    eda_data[delay_column].le(2),
+                ],
+                ["On time", "1-2 days late"],
+                default="3+ days late",
+            )
+        )
+        delay_rates = summarize_return_rates(delay_data, "delivery_status")
+    else:
+        delay_rates = pd.DataFrame()
+    coupon_rates = summarize_return_rates(eda_data, "coupon_used")
+
+    st.markdown('<div class="section-heading">Order outcomes and category patterns</div>', unsafe_allow_html=True)
+    left, right = st.columns(2, gap="small")
+    with left:
+        st.markdown("**Returned vs. kept orders**")
+        st.bar_chart(outcome_counts, horizontal=True, color="#bd583d", height=180)
+        st.caption("The target is imbalanced, so accuracy alone can hide missed returns.")
+    with right:
+        st.markdown("**Return rate by product category**")
+        st.bar_chart(
+            category_rates.set_index("product_category")[["return_rate"]].rename(
+                columns={"return_rate": "Return rate"}
+            ),
+            horizontal=True,
+            color="#bd7d3d",
+            height=210,
         )
 
-    transformed_names = detector.named_steps["preprocessor"].get_feature_names_out()
-    importances = detector.named_steps["model"].feature_importances_
-    importance_table = (
-        pd.DataFrame({"Feature": transformed_names, "Importance": importances})
-        .sort_values("Importance", ascending=False)
-        .head(15)
-        .set_index("Feature")
-    )
-    with st.expander("Top model signals", expanded=False):
-        st.bar_chart(importance_table, horizontal=True, color="#bd583d")
-        st.caption("Feature importance describes model split usage; it does not imply causation.")
+    st.markdown('<div class="section-heading">Timing, delivery, and promotion</div>', unsafe_allow_html=True)
+    left, right = st.columns(2, gap="small")
+    with left:
+        st.markdown("**Monthly return rate**")
+        st.line_chart(
+            monthly_rates.set_index("Month")[["return_rate"]],
+            color="#bd583d",
+            height=210,
+        )
+        st.caption("Monthly rates are descriptive; they do not establish a seasonal cause.")
+    with right:
+        st.markdown("**Return rate by shipping method**")
+        shipping_rates = summarize_return_rates(eda_data, "shipping_method")
+        st.bar_chart(
+            shipping_rates.set_index("shipping_method")[["return_rate"]].rename(
+                columns={"return_rate": "Return rate"}
+            ),
+            horizontal=True,
+            color="#bd7d3d",
+            height=210,
+        )
 
-    with st.expander("Observed return patterns", expanded=False):
-        left, right = st.columns(2)
-        with left:
-            rates = pd.Series(
-                {
-                    item["name"]: float(item["return_rate"]) * 100
-                    for item in insights["return_rate_by_product_category"]
-                },
-                name="Return rate (%)",
-            ).sort_values(ascending=False)
-            st.markdown("**Return rate by product category**")
-            st.bar_chart(rates, horizontal=True, color="#bd583d")
-        with right:
-            rates = pd.Series(
-                {
-                    item["name"]: float(item["return_rate"]) * 100
-                    for item in insights["return_rate_by_shipping_method"]
-                },
-                name="Return rate (%)",
-            ).sort_values(ascending=False)
-            st.markdown("**Return rate by shipping method**")
-            st.bar_chart(rates, horizontal=True, color="#bd7d3d")
+    st.markdown('<div class="section-heading">Delivery and numeric distributions</div>', unsafe_allow_html=True)
+    left, right = st.columns(2, gap="small")
+    with left:
+        st.markdown("**Return rate by delivery delay**")
+        if not delay_rates.empty:
+            st.bar_chart(
+                delay_rates.set_index("delivery_status")[["return_rate"]].rename(
+                    columns={"return_rate": "Return rate"}
+                ),
+                horizontal=True,
+                color="#bd7d3d",
+                height=210,
+            )
+        else:
+            st.info("Delivery-delay data is not available in this dataset.")
+    with right:
+        distribution_options = [
+            column
+            for column in [
+                "customer_age",
+                "product_price_usd",
+                "discount_percent",
+                "product_rating",
+                "past_purchase_count",
+                "delivery_delay_days",
+            ]
+            if column in eda_data
+        ]
+        distribution_column = st.selectbox("Numeric feature", distribution_options)
+        distribution_bins = pd.cut(eda_data[distribution_column].dropna(), bins=10)
+        distribution_counts = (
+            distribution_bins.value_counts(sort=False)
+            .rename_axis("Range")
+            .to_frame("Orders")
+        )
+        distribution_counts.index = distribution_counts.index.astype(str)
+        st.markdown(f"**Distribution of {distribution_column.replace('_', ' ')}**")
+        st.bar_chart(distribution_counts, color="#bd583d", height=210)
+
+    st.markdown('<div class="section-heading">Customer and order signals</div>', unsafe_allow_html=True)
+    left, right = st.columns(2, gap="small")
+    with left:
+        st.markdown("**Return rate by coupon use**")
+        st.bar_chart(
+            coupon_rates.set_index("coupon_used")[["return_rate"]].rename(
+                columns={"return_rate": "Return rate"}
+            ),
+            color="#bd583d",
+            height=190,
+        )
+    with right:
+        numeric_candidates = [
+            column
+            for column in [
+                "customer_age",
+                "product_price_usd",
+                "discount_percent",
+                "product_rating",
+                "past_return_rate_pct",
+                "delivery_delay_days",
+            ]
+            if column in eda_data
+        ]
+        numeric_correlations = (
+            eda_data[numeric_candidates]
+            .corrwith(eda_data["returned"], method="spearman")
+            .dropna()
+            .sort_values()
+            .to_frame("Spearman correlation with return")
+        )
+        st.markdown("**Numeric associations with returns**")
+        st.bar_chart(
+            numeric_correlations,
+            horizontal=True,
+            color="#bd7d3d",
+            height=210,
+        )
+        st.caption("Associations are not causal effects; values near zero have little monotonic relationship.")
+
+    top_category = category_rates.iloc[0]
+    low_category = category_rates.iloc[-1]
+    top_coupon = coupon_rates.iloc[0]
+    insight_text = (
+        f"**Category spread:** {top_category['product_category']} has the highest observed "
+        f"return rate ({top_category['return_rate']:.1%}); "
+        f"{low_category['product_category']} has the lowest ({low_category['return_rate']:.1%}). "
+        f"The gap is {(top_category['return_rate'] - low_category['return_rate']):.1%}.\n\n"
+        f"**Coupon segment:** {top_coupon['coupon_used']} orders have a "
+        f"{top_coupon['return_rate']:.1%} observed return rate."
+    )
+    st.info(insight_text + "\n\nSegment rates are descriptive; compare sample sizes and do not infer causation.")
+
+    with st.expander("Segment counts and return rates", expanded=False):
+        display_rates = category_rates.rename(
+            columns={"product_category": "Product category", "orders": "Orders", "return_rate": "Return rate"}
+        )
+        display_rates["Return rate"] = display_rates["Return rate"].map(lambda value: f"{value:.1%}")
+        st.dataframe(display_rates, hide_index=True, width="stretch")
+        st.markdown("**Data quality**")
+        quality = pd.DataFrame(
+            {
+                "Missing values": eda_data.isna().sum(),
+                "Distinct values": eda_data.nunique(dropna=True),
+            }
+        )
+        st.dataframe(quality, width="stretch")
+
+elif page == "Model evaluation":
+    render_page_header(
+        "HELD-OUT MODEL EVALUATION",
+        "Accuracy, shown plainly",
+        "This is the deployed model’s accuracy on a chronological holdout that was not used for training or model selection.",
+    )
+    test_metrics = evaluation["test_metrics"]
+    st.metric("Accuracy", f"{test_metrics['accuracy']:.1%}")
+    st.info(
+        "This accuracy-first model mostly predicts the majority class and misses most returns. "
+        "Accuracy alone does not establish return-detection effectiveness or production readiness. "
+        "See the executed evaluation notebook for the class-balance and cross-validation analysis."
+    )
 
 st.markdown("---")
 st.markdown(

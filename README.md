@@ -4,7 +4,7 @@
 
 This project explores whether an e-commerce order is likely to be returned. It uses product, customer history, order, and delivery information to estimate return risk and help teams decide which orders may need closer review.
 
-The project includes data understanding, exploratory analysis, preprocessing, feature engineering, classification, model evaluation, and a Streamlit dashboard for individual and batch predictions.
+The project includes data understanding, exploratory analysis, preprocessing, feature engineering, classification, model evaluation, and a Streamlit dashboard for individual predictions and return-pattern analysis.
 
 ## Abstract
 
@@ -16,8 +16,9 @@ Returns can create operational costs and affect customer experience. This projec
 - Prepare and engineer features for classification.
 - Train and compare return-prediction models.
 - Evaluate results with business-relevant metrics and class imbalance in mind.
-- Score individual orders and batches of orders in a dashboard.
-- Surface influential model features and aggregate product and shipping insights.
+- Score an individual order in the dashboard.
+- Explore return patterns with interactive charts and data-backed summaries.
+- Review held-out model performance, threshold behavior, and prediction explanations.
 
 ## Project modules
 
@@ -49,17 +50,17 @@ Identifiers or outcome-derived values are not intended as prediction inputs. The
 
 ## Models and evaluation
 
-The saved dashboard model is **XGBoost**. Its classification threshold is approximately **0.1549**, selected on a validation split to maximize F1. The dashboard also compares it with a Random Forest model.
+The dashboard deploys **Logistic Regression (accuracy-first, C=0.03)**. It was chosen by mean accuracy in 5-fold `StratifiedKFold` run only on the training period. The default 0.5 threshold was not tuned on the chronological holdout.
 
-| Model and decision threshold | Accuracy | Precision | Recall | F1-score | ROC-AUC |
-|---|---:|---:|---:|---:|---:|
-| XGBoost, default threshold 0.50 | 81.7% | 50.8% | 1.4% | 0.027 | 0.630 |
-| XGBoost, validation-tuned threshold 0.1549 | 50.8% | 22.9% | 71.8% | 0.347 | 0.630 |
-| Random Forest, default threshold 0.50 | 81.8% | 75.0% | 0.1% | 0.003 | 0.617 |
+| Final test metric | Result |
+|---|---:|
+| Accuracy | 81.5% |
 
-The majority-class accuracy baseline is approximately **81.7%**. Therefore, accuracy at the default threshold is misleading: the models identify very few returned orders at that cutoff. The validation-tuned threshold finds more returns but also flags many orders that are not returned. The threshold should be chosen according to the operational cost of missed returns versus manual review.
+This accuracy is higher than the previous deployed model's 56.3%, but it is **not a better return detector**. The dataset is imbalanced: the chronological test holdout contains 18.6% returns. The new model found only **15 of 1,400** returned orders (1.1% recall) and missed **1,385**. Its test accuracy (81.48%) is only marginally above the majority-class baseline (81.45%), which predicts every order as not returned. The Streamlit evaluation page shows only accuracy as requested, with a warning that it misses most returns; supporting metrics are retained in the evaluation artifact and notebook.
 
-These are results for this dataset and holdout split; they do not guarantee the same performance on future or different orders.
+The final test period is **2024-09-30 through 2024-12-30** (7,545 orders). The 5-fold stratified cross-validation was applied to the earlier training partition only. Its mean accuracy was **81.83%** for the selected unweighted Logistic Regression and **81.79%** for the majority-class baseline; returned-class recall in those folds was only **0.97%**. The accuracy-first behavior is therefore real, but not operationally useful for finding returns.
+
+The dataset contains 60,000 synthetic orders. To improve actual return detection rather than the accuracy display, collect more representative labeled data and point-in-time customer/order features; evaluate with class-aware metrics and a future-period holdout. The model is not production-ready.
 
 ## Streamlit dashboard
 
@@ -67,37 +68,24 @@ The dashboard provides:
 
 - **Overview:** dataset-level return rate, evaluation highlights, and aggregate return rates by product category.
 - **Predict an order:** enter customer, product, order, and delivery details to get an estimated score and review recommendation.
-- **Score a file:** upload a CSV, score each row, and download the results.
-- **Insights & model:** compare evaluation metrics and view model feature importance and aggregate return patterns.
+- **Exploratory analysis:** inspect return distributions, category and delivery patterns, monthly trends, coupon use, and numeric associations.
+- **Model evaluation:** see the deployed model's held-out accuracy only. Accuracy can be misleading on an imbalanced target; the executed `notebooks/06_model_evaluation.ipynb` contains the data-quality audit, class-imbalance baseline, feature engineering, stratified cross-validation, and supporting evaluation metrics.
 
-The estimated return score is a probability-like model output, not a guarantee. A review flag is a recommendation for closer inspection, not a confirmed return.
-
-### Batch CSV input
-
-Use the template available in the dashboard. Each row represents one order and needs these columns:
-
-```text
-order_date,customer_age,country,device_type,product_category,product_price_usd,discount_percent,coupon_used,product_rating,past_purchase_count,past_return_rate_pct,session_length_minutes,num_product_views,shipping_method,delivery_time_days,delivery_delay_days,payment_method,total_orders_lifetime,total_returns_lifetime
-```
-
-The app derives calendar, purchase-frequency, price, and customer-return-history features from these inputs. The `order_date` should be a recognizable date such as `2025-04-18`. A `returned` target value is not required for new predictions.
-
-The scored output adds:
-
-- `estimated_return_score`: estimated score from 0 to 1.
-- `return_risk`: a readable risk or review label.
-- `flag_for_review`: `1` when the selected threshold is met, otherwise `0`.
+Individual Logistic Regression predictions include per-order feature contributions. A review flag is a recommendation for closer inspection, not a confirmed return.
 
 ## Notebooks and application
 
 ```text
 .
 ├── app.py
+├── train_model.py
 ├── requirements.txt
 ├── datasets/
 │   └── ecommerce_return_prediction_feature_engineered.csv
 ├── models/
 │   ├── best_return_detection_model.joblib
+│   ├── model_evaluation.json
+│   ├── model_validation_comparison.csv
 │   ├── dashboard_insights.json
 │   └── two_model_comparison_metrics.csv
 └── notebooks/
@@ -109,17 +97,18 @@ The scored output adds:
     └── 06_model_evaluation.ipynb
 ```
 
-The notebooks document data understanding, EDA, preprocessing, engineering, model training, and evaluation. The Streamlit app loads the saved model, comparison metrics, and aggregate dashboard insights.
+The notebooks document data understanding, EDA, preprocessing, engineering, model training, and evaluation. `train_model.py` trains and compares the candidate models, runs expanding-window cross-validation, selects a validation threshold, and evaluates the chosen model once on the final chronological holdout. The app loads those saved artifacts.
 
 ## Run the dashboard locally
 
 Install the packages listed in `requirements.txt`, then run:
 
 ```powershell
+python train_model.py
 python -m streamlit run app.py
 ```
 
-The dashboard uses XGBoost, scikit-learn, pandas, NumPy, and Streamlit. The model and metrics are read from the `models/` folder.
+The dashboard uses scikit-learn, pandas, NumPy, and Streamlit. XGBoost is also used by the model-training script. Keep the engineered dataset in `datasets/` when retraining.
 
 ## Keywords
 
